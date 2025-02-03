@@ -6,6 +6,7 @@ from cryptography.fernet import Fernet
 import tkinter as tk
 from tkinter import messagebox, simpledialog, ttk
 
+# Test
 # Define the base directory of the script
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
