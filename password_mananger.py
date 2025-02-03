@@ -3,6 +3,8 @@ import stat
 import secrets
 import string
 from cryptography.fernet import Fernet
+import tkinter as tk
+from tkinter import messagebox, simpledialog, ttk
 
 # Define the base directory of the script
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -22,8 +24,6 @@ def generate_key():
     key = Fernet.generate_key()
     with open(KEY_FILE, "wb") as key_file:
         key_file.write(key)
-    
-    # Make the key file read-only to prevent overwriting
     os.chmod(KEY_FILE, stat.S_IREAD)
     return key
 
@@ -33,19 +33,17 @@ def load_key():
         with open(KEY_FILE, "rb") as key_file:
             return key_file.read()
     except FileNotFoundError:
-        print("Encryption key not found! Please ensure 'key.key' exists in the project directory.")
-        exit(1)  # Exit program if key is missing
+        messagebox.showerror("Error", "Encryption key not found! Please ensure 'key.key' exists in the project directory.")
+        exit(1)
     except Exception as e:
-        print(f"An error occurred while loading the key: {e}")
+        messagebox.showerror("Error", f"An error occurred while loading the key: {e}")
         exit(1)
 
 # Check if key exists, if not, generate a new one
 if not os.path.exists(KEY_FILE):
     key = generate_key()
-    print("Encryption key generated and saved (set to read-only)!")
 else:
     key = load_key()
-    print("Encryption key loaded.")
 
 # Initialize Fernet with the loaded key
 fernet = Fernet(key)
@@ -60,8 +58,7 @@ def decrypt_password(encrypted_password):
     try:
         decrypted = fernet.decrypt(encrypted_password).decode()
         return decrypted
-    except Exception as e:
-        print(f"Error decrypting password: {e}")
+    except Exception:
         return "[Decryption Failed]"
 
 # Save password to file
@@ -70,81 +67,116 @@ def save_password(account, password):
         encrypted_pw = encrypt_password(password)
         with open(PASSWORD_FILE, "a") as file:
             file.write(f"{account} | {encrypted_pw.decode()}\n")
-        print(f"Password for {account} saved!")
+        messagebox.showinfo("Success", f"Password for {account} saved!")
     except Exception as e:
-        print(f"An error occurred while saving this password: {e}")
+        messagebox.showerror("Error", f"An error occurred while saving the password: {e}")
 
-# View stored passwords with error handling
-def view_passwords():
-    if not os.path.exists(PASSWORD_FILE):
-        print("No passwords stored yet!")
-        return
+# GUI Setup
+def setup_gui():
+    root = tk.Tk()
+    root.title("Password Manager")
+    root.geometry("600x400")
 
-    search = input("Enter the account name to search (or press Enter to view all): ").strip().lower()
+    # Frame for Adding Passwords
+    add_frame = tk.Frame(root)
+    add_frame.pack(pady=10)
 
-    try:
-        with open(PASSWORD_FILE, "r") as file:
-            found = False
-            for line in file:
-                try:
-                    account, encrypted_pw = line.strip().split(" | ")
-                    decrypted_pw = decrypt_password(encrypted_pw.encode())
+    # Account Entry
+    tk.Label(add_frame, text="Account Name:").grid(row=0, column=0, padx=5, pady=5, sticky="e")
+    account_entry = tk.Entry(add_frame, width=40)
+    account_entry.grid(row=0, column=1, padx=5, pady=5)
 
-                    if not search or search in account.lower():
-                        print(f"Account: {account}, Password: {decrypted_pw}")
-                        found = True
-                except ValueError:
-                    print(f"Skipping malformed line: {line.strip()}")
+    # Password Entry
+    tk.Label(add_frame, text="Password:").grid(row=1, column=0, padx=5, pady=5, sticky="e")
+    password_entry = tk.Entry(add_frame, width=40, show="*")
+    password_entry.grid(row=1, column=1, padx=5, pady=5)
 
-            if not found:
-                print("No matching accounts found.")
-    except Exception as e:
-        print(f"An error occurred while reading passwords: {e}")
+    # Generate Password Button
+    def generate_password():
+        generated_password = generate_random_password()
+        password_entry.delete(0, tk.END)
+        password_entry.insert(0, generated_password)
 
-# Main menu with input validation
-def main():
-    while True:
-        try:
-            choice = input("\nDo you want to (A)dd a new password, (V)iew saved passwords, or (Q)uit? ").strip().lower()
+    generate_btn = tk.Button(add_frame, text="Generate Password", command=generate_password)
+    generate_btn.grid(row=2, column=0, padx=5, pady=5)
 
-            if choice == 'a':
-                account = input("Enter the account name (e.g., Gmail, Facebook): ").strip()
-                if not account:
-                    print("Account name cannot be empty.")
-                    continue
+    # Save Password Button
+    def save():
+        account = account_entry.get().strip()
+        password = password_entry.get().strip()
+        if account and password:
+            save_password(account, password)
+            account_entry.delete(0, tk.END)
+            password_entry.delete(0, tk.END)
+            refresh_passwords()  # Refresh the password viewer after saving
+        else:
+            messagebox.showwarning("Input Error", "Both account and password fields must be filled.")
 
-                # Ask if user wants to generate a password
-                while True:
-                    generate = input("Do you want to generate a secure random password? (Y/N): ").strip().lower()
+    save_btn = tk.Button(add_frame, text="Save Password", command=save)
+    save_btn.grid(row=2, column=1, padx=5, pady=5, sticky="w")
 
-                    if generate == 'y':
-                        password = generate_random_password()
-                        print(f"Generated Password for {account}: {password}")
-                        break
+    # Separator
+    ttk.Separator(root, orient='horizontal').pack(fill='x', pady=10)
 
-                    elif generate == 'n':
-                        password = input("Enter the password: ").strip()
-                        if not password:
-                            print("Password cannot be empty.")
-                            continue
-                        break
+    # Frame for Viewing Passwords
+    view_frame = tk.Frame(root)
+    view_frame.pack(pady=10)
 
-                    else:
-                        print("Invalid choice. Please enter Y or N.")
+    # Search Bar
+    tk.Label(view_frame, text="Search Account:").grid(row=0, column=0, padx=5)
+    search_entry = tk.Entry(view_frame, width=30)
+    search_entry.grid(row=0, column=1, padx=5)
 
-                save_password(account, password)
+    def search_passwords():
+        query = search_entry.get().strip().lower()
+        refresh_passwords(query)
 
-            elif choice == 'v':
-                view_passwords()
+    search_btn = tk.Button(view_frame, text="Search", command=search_passwords)
+    search_btn.grid(row=0, column=2, padx=5)
 
-            elif choice == 'q':
-                print("Exiting Password Manager. Stay secure!")
-                break
+    # Treeview for displaying passwords
+    tree = ttk.Treeview(view_frame, columns=("Account", "Password"), show='headings')
+    tree.heading("Account", text="Account")
+    tree.heading("Password", text="Password")
+    tree.grid(row=1, column=0, columnspan=3, pady=10)
 
-            else:
-                print("Invalid choice. Please enter A, V, or Q.")
-        except Exception as e:
-            print(f"An unexpected error occurred: {e}")
+    # Scrollbar for Treeview
+    scrollbar = ttk.Scrollbar(view_frame, orient="vertical", command=tree.yview)
+    tree.configure(yscroll=scrollbar.set)
+    scrollbar.grid(row=1, column=3, sticky='ns')
 
+    # Refresh Passwords Display
+    def refresh_passwords(query=""):
+        for row in tree.get_children():
+            tree.delete(row)
+
+        if os.path.exists(PASSWORD_FILE):
+            with open(PASSWORD_FILE, "r") as file:
+                for line in file:
+                    try:
+                        account, encrypted_pw = line.strip().split(" | ")
+                        decrypted_pw = decrypt_password(encrypted_pw.encode())
+                        if query in account.lower():
+                            tree.insert("", "end", values=(account, decrypted_pw))
+                    except ValueError:
+                        continue
+
+    # Copy password to clipboard
+    def copy_password(event):
+        selected_item = tree.selection()
+        if selected_item:
+            account, password = tree.item(selected_item)["values"]
+            root.clipboard_clear()
+            root.clipboard_append(password)
+            messagebox.showinfo("Copied", f"Password for {account} copied to clipboard!")
+
+    tree.bind("<Double-1>", copy_password)
+
+    # Initially load passwords
+    refresh_passwords()
+
+    root.mainloop()
+
+# Run the GUI
 if __name__ == "__main__":
-    main()
+    setup_gui()
