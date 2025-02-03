@@ -72,10 +72,16 @@ def save_password(account, password):
         messagebox.showerror("Error", f"An error occurred while saving the password: {e}")
 
 # GUI Setup
+from tkinter import ttk
+
 def setup_gui():
     root = tk.Tk()
     root.title("Password Manager")
-    root.geometry("600x400")
+    root.geometry("600x550")
+
+    # Apply a modern ttk theme
+    style = ttk.Style(root)
+    style.theme_use("clam")  # Options: 'clam', 'alt', 'default', 'classic'
 
     # Frame for Adding Passwords
     add_frame = tk.Frame(root)
@@ -100,7 +106,7 @@ def setup_gui():
     generate_btn = tk.Button(add_frame, text="Generate Password", command=generate_password)
     generate_btn.grid(row=2, column=0, padx=5, pady=5)
 
-    # Save Password Button
+# Save Password Button
     def save():
         account = account_entry.get().strip()
         password = password_entry.get().strip()
@@ -157,7 +163,7 @@ def setup_gui():
                         account, encrypted_pw = line.strip().split(" | ")
                         decrypted_pw = decrypt_password(encrypted_pw.encode())
                         if query in account.lower():
-                            tree.insert("", "end", values=(account, decrypted_pw))
+                            tree.insert("", "end", values=(account, "******"), tags=(decrypted_pw,))
                     except ValueError:
                         continue
 
@@ -171,6 +177,27 @@ def setup_gui():
             messagebox.showinfo("Copied", f"Password for {account} copied to clipboard!")
 
     tree.bind("<Double-1>", copy_password)
+
+    # Reveal password
+    def reveal_password():
+        selected_item = tree.selection()
+        if selected_item:
+            decrypted_pw = tree.item(selected_item, "tags")[0]  # Get the decrypted password from tags
+            account = tree.item(selected_item)["values"][0]
+            tree.item(selected_item, values=(account, decrypted_pw))
+
+    reveal_btn = tk.Button(view_frame, text="Reveal Password", command=reveal_password)
+    reveal_btn.grid(row=2, column=1, pady=5)
+
+    # Hide password
+    def hide_password():
+        selected_item = tree.selection()
+        if selected_item:
+            account = tree.item(selected_item)["values"][0]
+            tree.item(selected_item, values=(account, "******"))
+
+    hide_btn = tk.Button(view_frame, text="Hide Password", command=hide_password)
+    hide_btn.grid(row=2, column=2, pady=5)
 
     # Initially load passwords
     refresh_passwords()
